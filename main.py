@@ -30,6 +30,42 @@ cap = cv2.VideoCapture(0)
 cap.set(cv2.CAP_PROP_FRAME_WIDTH, screen_width)
 cap.set(cv2.CAP_PROP_FRAME_HEIGHT, screen_height)
 
+# Define colors
+WHITE = (255, 255, 255)
+BLACK = (0, 0, 0)
+GREEN = (0, 255, 0)
+RED = (255, 0, 0)
+
+# Define fonts
+font = pygame.font.SysFont(None, 48)
+small_font = pygame.font.SysFont(None, 36)
+
+# List of landmarks to track
+t_pose = [
+    # Store the name of the pose
+    "TPose",
+    # Check if arm is out straight
+    "LEFT_SHOULDER", "LEFT_ELBOW", "LEFT_WRIST",
+    "RIGHT_SHOULDER", "RIGHT_ELBOW", "RIGHT_WRIST",
+
+    # Check if legs are not bent
+    "LEFT_HIP", "LEFT_KNEE", "LEFT_ANKLE",
+    "RIGHT_HIP", "RIGHT_KNEE", "RIGHT_ANKLE",
+
+    # Check if 90-degree angle from hip to shoulder to hand
+    "LEFT_WRIST", "LEFT_SHOULDER", "LEFT_HIP",
+    "RIGHT_WRIST", "RIGHT_SHOULDER", "RIGHT_HIP"
+
+]
+
+flex_pose = [
+    "FlexPose",
+
+    # Check 90-degree bent arm
+    "LEFT_SHOULDER", "LEFT_ELBOW", "LEFT_WRIST",
+    "RIGHT_SHOULDER", "RIGHT_ELBOW", "RIGHT_WRIST",
+
+]
 
 def calculate_angle(a, b, c):
     a = np.array(a)
@@ -45,7 +81,7 @@ def calculate_angle(a, b, c):
     return angle
 
 
-def track_angle(pose, resized_frame, screen_width, screen_height, nodeOne, nodeTwo, nodeThree):
+def track_angle(pose, resized_frame, screen_width, screen_height, landmks_list):
     """
     Process pose landmarks and calculate the angle between nodeOne, nodeTwo, and nodeThree.
 
@@ -54,12 +90,12 @@ def track_angle(pose, resized_frame, screen_width, screen_height, nodeOne, nodeT
     - resized_frame: The resized frame to process
     - screen_width: Screen width for landmark scaling
     - screen_height: Screen height for landmark scaling
-    - nodeOne, nodeTwo, nodeThree: The pose landmarks to track (as strings, e.g., 'LEFT_SHOULDER')
+    - landmks_list: List of landmarks
 
     Returns:
-    - frame with the angle text drawn on it
+    - angles between the three points
     """
-    angle = 0
+    angles = []
     image_rgb = cv2.cvtColor(resized_frame, cv2.COLOR_BGR2RGB)
     results = pose.process(image_rgb)
 
@@ -67,90 +103,226 @@ def track_angle(pose, resized_frame, screen_width, screen_height, nodeOne, nodeT
     if results.pose_landmarks:
         landmarks = results.pose_landmarks.landmark
 
-        # Use getattr to dynamically access the correct PoseLandmark attributes
-        shoulder = [landmarks[getattr(mp_pose.PoseLandmark, nodeOne).value].x * screen_width,
-                    landmarks[getattr(mp_pose.PoseLandmark, nodeOne).value].y * screen_height]
-        elbow = [landmarks[getattr(mp_pose.PoseLandmark, nodeTwo).value].x * screen_width,
-                 landmarks[getattr(mp_pose.PoseLandmark, nodeTwo).value].y * screen_height]
-        wrist = [landmarks[getattr(mp_pose.PoseLandmark, nodeThree).value].x * screen_width,
-                 landmarks[getattr(mp_pose.PoseLandmark, nodeThree).value].y * screen_height]
+        for i in range(1, len(landmks_list), 3):
+            # Use getattr to dynamically access the correct PoseLandmark attributes
+            shoulder = [landmarks[getattr(mp_pose.PoseLandmark, landmks_list[i]).value].x * screen_width,
+                        landmarks[getattr(mp_pose.PoseLandmark, landmks_list[i]).value].y * screen_height]
+            elbow = [landmarks[getattr(mp_pose.PoseLandmark, landmks_list[i + 1]).value].x * screen_width,
+                     landmarks[getattr(mp_pose.PoseLandmark, landmks_list[i + 1]).value].y * screen_height]
+            wrist = [landmarks[getattr(mp_pose.PoseLandmark, landmks_list[i + 2]).value].x * screen_width,
+                     landmarks[getattr(mp_pose.PoseLandmark, landmks_list[i + 2]).value].y * screen_height]
 
-        # Calculate the angle
-        angle = calculate_angle(shoulder, elbow, wrist)
+            # Calculate the angle
+            angle1 = calculate_angle(shoulder, elbow, wrist)
 
-    return angle
-
-
-
+            # Append calculated angle to the list
+            angles.append(angle1)
 
 
-# Setup MediaPipe pose instance
-with mp_pose.Pose(min_detection_confidence=0.5, min_tracking_confidence=0.5) as pose:
-    clock = pygame.time.Clock()
-    frame_count = 0
-    start_time = time.time()
-    fps_interval = 2  # Increase interval to reduce FPS calculation overhead
-    running = True
+    return angles
 
-    # Create surface once, reuse for each frame
-    frame_surface = pygame.Surface((screen_width, screen_height))
 
-    # Tracking state
-    tracking_active = False  # Angle tracking initially inactive
 
-    while running:
+
+
+# Button class
+class Button:
+    def __init__(self, text, x, y, width, height, color, text_color):
+        self.text = text
+        self.rect = pygame.Rect(x, y, width, height)
+        self.color = color
+        self.text_color = text_color
+        self.original_color = color  # Store the original color
+        self.clicked = False
+
+    def draw(self, screen):
+        button_color = RED if self.clicked else self.original_color
+        pygame.draw.rect(screen, button_color, self.rect)
+        text_surf = font.render(self.text, True, self.text_color)
+        text_rect = text_surf.get_rect(center=self.rect.center)
+        screen.blit(text_surf, text_rect)
+
+    def is_clicked(self, event):
+        if event.type == pygame.MOUSEBUTTONDOWN:
+            if self.rect.collidepoint(event.pos):
+                return True
+        return False
+
+
+# Create buttons for Start Menu
+start_button = Button("Start", 200, 100, 200, 50, GREEN, BLACK)
+instructions_button = Button("Instructions", 200, 180, 200, 50, GREEN, BLACK)
+quit_button = Button("Quit", 200, 260, 200, 50, RED, BLACK)
+
+# Create buttons for Game
+t_pose_button = Button("T-pose", 300, 100, 200, 50, GREEN, BLACK)
+flex_pose_button = Button("Flex-pose", 300, 180, 200, 50, GREEN, BLACK)
+
+
+def instructions_menu():
+    running_instruction = True
+    while running_instruction:
+        screen.fill(WHITE)
+
+        instructions_text = small_font.render("Press ESC to go back", True, BLACK)
+        screen.blit(instructions_text, (150, 180))
+
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
-                running = False
-            elif event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_SPACE:  # Press space to toggle angle tracking
-                    tracking_active = not tracking_active
+                running_instruction = False
+            if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+                running_instruction = False  # Return to main menu when ESC is pressed
 
-        # Capture frame
-        ret, frame = cap.read()
-        if not ret:
-            break
+        pygame.display.update()
 
-        # Convert BGR to RGB once and resize to the screen resolution if needed
-        resized_frame = cv2.resize(frame, (screen_width, screen_height))
+def main_menu():
+    running_menu = True
+    while running_menu:
+        screen.fill(WHITE)
 
-        returned_angle = 0
-        # Process pose and calculate angle if tracking is active
-        if tracking_active:
-            returned_angle = track_angle(pose, resized_frame, screen_width, screen_height, "LEFT_SHOULDER", "LEFT_ELBOW", "LEFT_WRIST")
+        # Draw buttons
+        start_button.draw(screen)
+        instructions_button.draw(screen)
+        quit_button.draw(screen)
 
-        cv2.putText(resized_frame, str(int(returned_angle)),
-                    (100,100),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2, cv2.LINE_AA)
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                running_menu = False
 
-        # Rotate and update the frame in Pygame
-        rotated_frame = cv2.rotate(resized_frame, cv2.ROTATE_90_COUNTERCLOCKWISE)
+            # Check if buttons are clicked
+            if start_button.is_clicked(event):
+                game_loop()  # Switch to game loop
+            if instructions_button.is_clicked(event):
+                instructions_menu()  # Switch to instructions screen
+            if quit_button.is_clicked(event):
+                running_menu = False
 
-        # Update the Pygame surface
-        pygame.surfarray.blit_array(frame_surface, rotated_frame)
+        pygame.display.update()
 
-        # Draw FPS
-        frame_count += 1
-        current_time = time.time()
-        if current_time - start_time >= fps_interval:
-            fps = frame_count / (current_time - start_time)
-            frame_count = 0
-            start_time = current_time
-            fps_text = pygame.font.SysFont(None, 36).render(f"FPS: {int(fps)}", True, (255, 255, 255))
-            frame_surface.blit(fps_text, (10, 10))
 
-        # Indicate whether tracking is active or not
-        tracking_text = "Tracking: ON" if tracking_active else "Tracking: OFF"
-        tracking_status = pygame.font.SysFont(None, 36).render(tracking_text, True,
-                                                               (0, 255, 0) if tracking_active else (255, 0, 0))
-        frame_surface.blit(tracking_status, (screen_width - 200, 10))
 
-        # Display the frame on the Pygame screen
-        screen.blit(frame_surface, (0, 0))
-        pygame.display.flip()
+def game_loop():
+    # Set the countdown time in seconds
+    countdown_time = 10  # 10 seconds countdown
+    selected_pose = flex_pose
 
-        # Limit FPS to 30
-        clock.tick(30)
+    # Setup MediaPipe pose instance
+    with (mp_pose.Pose(min_detection_confidence=0.5, min_tracking_confidence=0.5) as pose):
+        clock = pygame.time.Clock()
+        frame_count = 0
+        start_time = time.time()
+        fps_interval = 2  # Increase interval to reduce FPS calculation overhead
+        running = True
 
-    cap.release()
-    pygame.quit()
+        # Create surface once, reuse for each frame
+        frame_surface = pygame.Surface((screen_width, screen_height))
+
+        # Tracking state
+        tracking_active = False  # Angle tracking initially inactive
+
+        # Start the timer
+        start_ticks = pygame.time.get_ticks()
+
+        while running:
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    running = False
+                elif event.type == pygame.KEYDOWN and event.key == pygame.K_0:
+                    running = False
+                    main_menu()
+                elif event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_SPACE:  # Press space to toggle angle tracking
+                        tracking_active = not tracking_active
+                if t_pose_button.is_clicked(event):
+                    t_pose_button.clicked = not t_pose_button.clicked
+                    selected_pose = t_pose
+                if flex_pose_button.is_clicked(event):
+                    flex_pose_button.clicked = not flex_pose_button.clicked
+                    selected_pose = flex_pose
+
+            # Capture frame
+            ret, frame = cap.read()
+            if not ret:
+                break
+
+            # Convert BGR to RGB once and resize to the screen resolution if needed
+            resized_frame = cv2.resize(frame, (screen_width, screen_height))
+
+            # Store the array that contains the angles measured
+            returned_angle_list = []
+
+            # Process pose and calculate angle if tracking is active
+            if tracking_active:
+                returned_angle_list = track_angle(pose, resized_frame, screen_width, screen_height, selected_pose)
+
+            # Flip the frame horizontally to mirror it
+            mirrored_frame = cv2.flip(resized_frame, 1)
+
+            # Then, create a Pygame surface from the mirrored frame
+            frame_surface = pygame.surfarray.make_surface(mirrored_frame.swapaxes(0, 1))
+
+            # ---- Countdown Logic ----
+            # Calculate the remaining time
+            seconds = countdown_time - (pygame.time.get_ticks() - start_ticks) // 1000
+
+            # Render the countdown text
+            if seconds > 0:
+                countdown_text = font.render(str(seconds), True, BLACK)
+            else:
+                countdown_text = font.render("Start!", True, BLACK)
+
+            # Display the countdown text at the center of the screen
+            countdown_text_rect = countdown_text.get_rect(center=(screen_width // 2, 100))
+            screen.blit(frame_surface, (0, 0))  # First draw the frame
+            screen.blit(countdown_text, countdown_text_rect)  # Then overlay the countdown
+
+            # ---- End of Countdown Logic ----
+
+            # Check for different poses detection
+            if len(returned_angle_list) >= 2:
+                if selected_pose[0] == "TPose":
+                    if 170 < returned_angle_list[0] <= 185 and 170 < returned_angle_list[1] <= 185 and 170 < returned_angle_list[2] <= 185 and 170 < returned_angle_list[3] <= 185 and 80 < returned_angle_list[4] <= 110 and 80 < returned_angle_list[5] <= 110:
+                        t_pose_text = font.render("You are T Posing!", True, BLACK)
+
+                        # Display T-Pose text at the center of the screen
+                        t_pose_text_rect = t_pose_text.get_rect(center=(screen_width // 2, screen_height // 2))
+                        screen.blit(t_pose_text, t_pose_text_rect)
+                        print("you are t posing")
+
+
+                elif selected_pose[0] == "FlexPose":
+                    if 60 < returned_angle_list[0] <= 90 and 60 < returned_angle_list[1] <= 90:
+                        flex_pose_text = font.render("You are Flexing!", True, BLACK)
+
+                        # Display flex Pose text
+                        flex_pose_text_rect = flex_pose_text.get_rect(center=(screen_width // 2, screen_height // 2))
+                        screen.blit(flex_pose_text, flex_pose_text_rect)
+                        print("you are t posing")
+
+
+            # Draw angles on the screen using Pygame (this ensures they're not rotated)
+            for idx, angle in enumerate(returned_angle_list):
+                angle_text = font.render(f"Angle {idx+1}: {int(angle)}", True, BLACK)
+                screen.blit(angle_text, (50, 100 + idx * 50))
+
+
+            t_pose_button.draw(screen)
+            flex_pose_button.draw(screen)
+
+            # Indicate whether tracking is active or not
+            tracking_text = "Tracking: ON" if tracking_active else "Tracking: OFF"
+            tracking_status = small_font.render(tracking_text, True, GREEN if tracking_active else RED)
+            screen.blit(tracking_status, (screen_width - 200, 10))
+
+            # Display everything on the Pygame screen
+            pygame.display.flip()
+
+            # Limit FPS to 30
+            clock.tick(30)
+
+        cap.release()
+        pygame.quit()
+
+
+
+main_menu()
