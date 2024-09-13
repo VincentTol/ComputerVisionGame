@@ -4,41 +4,12 @@ import numpy as np
 import pygame
 import ctypes
 import time
-
-# Initialize Pygame
-pygame.init()
-
-# Get screen resolution using Ctypes
-user32 = ctypes.windll.user32
-screen_width = user32.GetSystemMetrics(0)
-screen_height = user32.GetSystemMetrics(1)
-
-print(f"Screen Resolution: {screen_width}x{screen_height}")
-
-# Create a fullscreen window using the full resolution
-screen = pygame.display.set_mode((screen_width, screen_height), pygame.FULLSCREEN)
-pygame.display.set_caption("MediaPipe with Pygame")
-
-# Mediapipe solutions for pose
-mp_drawing = mp.solutions.drawing_utils
-mp_pose = mp.solutions.pose
-
-# Video capture
-cap = cv2.VideoCapture(0)
-
-# Set camera resolution (match screen resolution if camera supports it)
-cap.set(cv2.CAP_PROP_FRAME_WIDTH, screen_width)
-cap.set(cv2.CAP_PROP_FRAME_HEIGHT, screen_height)
-
 # Define colors
 WHITE = (255, 255, 255)
 BLACK = (0, 0, 0)
 GREEN = (0, 255, 0)
 RED = (255, 0, 0)
 
-# Define fonts
-font = pygame.font.SysFont(None, 48)
-small_font = pygame.font.SysFont(None, 36)
 
 # List of landmarks to track
 t_pose = [
@@ -66,6 +37,7 @@ flex_pose = [
     "RIGHT_SHOULDER", "RIGHT_ELBOW", "RIGHT_WRIST",
 
 ]
+
 
 def calculate_angle(a, b, c):
     a = np.array(a)
@@ -122,9 +94,6 @@ def track_angle(pose, resized_frame, screen_width, screen_height, landmks_list):
     return angles
 
 
-
-
-
 # Button class
 class Button:
     def __init__(self, text, x, y, width, height, color, text_color):
@@ -147,17 +116,6 @@ class Button:
             if self.rect.collidepoint(event.pos):
                 return True
         return False
-
-
-# Create buttons for Start Menu
-start_button = Button("Start", 200, 100, 200, 50, GREEN, BLACK)
-instructions_button = Button("Instructions", 200, 180, 200, 50, GREEN, BLACK)
-quit_button = Button("Quit", 200, 260, 200, 50, RED, BLACK)
-
-# Create buttons for Game
-t_pose_button = Button("T-pose", 300, 100, 200, 50, GREEN, BLACK)
-flex_pose_button = Button("Flex-pose", 300, 180, 200, 50, GREEN, BLACK)
-
 
 def instructions_menu():
     running_instruction = True
@@ -199,23 +157,71 @@ def main_menu():
 
         pygame.display.update()
 
+def pose_detection(angles, pose):
+    if pose is not None:
+        if pose[0] == "TPose":
+            if 170 < angles[0] <= 185 and 170 < angles[1] <= 185 and 170 < angles[
+                2] <= 185 and 170 < angles[3] <= 185 and 80 < angles[4] <= 110 and 80 < \
+                    angles[5] <= 110:
+                return "You are T Posing!"
+        elif pose[0] == "FlexPose":
+            if 60 < angles[0] <= 90 and 60 < angles[1] <= 90:
+                return "You are Flexing!"
+    return None
+
+
+
+# Initialize Pygame
+pygame.init()
+
+# Get screen resolution using Ctypes
+user32 = ctypes.windll.user32
+screen_width = user32.GetSystemMetrics(0)
+screen_height = user32.GetSystemMetrics(1)
+
+print(f"Screen Resolution: {screen_width}x{screen_height}")
+
+# Create a fullscreen window using the full resolution
+screen = pygame.display.set_mode((screen_width, screen_height), pygame.FULLSCREEN)
+pygame.display.set_caption("MediaPipe with Pygame")
+
+# Mediapipe solutions for pose
+mp_drawing = mp.solutions.drawing_utils
+mp_pose = mp.solutions.pose
+
+# Video capture
+cap = cv2.VideoCapture(0)
+
+# Set camera resolution (match screen resolution if camera supports it)
+cap.set(cv2.CAP_PROP_FRAME_WIDTH, screen_width)
+cap.set(cv2.CAP_PROP_FRAME_HEIGHT, screen_height)
+
+
+
+# Define fonts
+font = pygame.font.SysFont(None, 48)
+small_font = pygame.font.SysFont(None, 36)
+
+
+# Create buttons for Start Menu
+start_button = Button("Start", 200, 100, 200, 50, GREEN, BLACK)
+instructions_button = Button("Instructions", 200, 180, 200, 50, GREEN, BLACK)
+quit_button = Button("Quit", 200, 260, 200, 50, RED, BLACK)
+
+# Create buttons for Game
+t_pose_button = Button("T-pose", 300, 100, 200, 50, GREEN, BLACK)
+flex_pose_button = Button("Flex-pose", 300, 180, 200, 50, GREEN, BLACK)
 
 
 def game_loop():
     # Set the countdown time in seconds
     countdown_time = 10  # 10 seconds countdown
-    selected_pose = flex_pose
+    selected_pose = None
 
     # Setup MediaPipe pose instance
     with (mp_pose.Pose(min_detection_confidence=0.5, min_tracking_confidence=0.5) as pose):
         clock = pygame.time.Clock()
-        frame_count = 0
-        start_time = time.time()
-        fps_interval = 2  # Increase interval to reduce FPS calculation overhead
         running = True
-
-        # Create surface once, reuse for each frame
-        frame_surface = pygame.Surface((screen_width, screen_height))
 
         # Tracking state
         tracking_active = False  # Angle tracking initially inactive
@@ -233,12 +239,25 @@ def game_loop():
                 elif event.type == pygame.KEYDOWN:
                     if event.key == pygame.K_SPACE:  # Press space to toggle angle tracking
                         tracking_active = not tracking_active
+                    if not tracking_active:
+                        # Reset selected pose if tracking is deactivated
+                        selected_pose = None
+                        t_pose_button.clicked = False
+                        flex_pose_button.clicked = False
                 if t_pose_button.is_clicked(event):
-                    t_pose_button.clicked = not t_pose_button.clicked
-                    selected_pose = t_pose
+                    if tracking_active:
+                        t_pose_button.clicked = not t_pose_button.clicked
+                        if t_pose_button.clicked:
+                            selected_pose = t_pose
+                        else:
+                            selected_pose = None
                 if flex_pose_button.is_clicked(event):
-                    flex_pose_button.clicked = not flex_pose_button.clicked
-                    selected_pose = flex_pose
+                    if tracking_active:
+                        flex_pose_button.clicked = not flex_pose_button.clicked
+                        if flex_pose_button.clicked:
+                            selected_pose = flex_pose
+                        else:
+                            selected_pose = None
 
             # Capture frame
             ret, frame = cap.read()
@@ -252,7 +271,7 @@ def game_loop():
             returned_angle_list = []
 
             # Process pose and calculate angle if tracking is active
-            if tracking_active:
+            if tracking_active and selected_pose is not None:
                 returned_angle_list = track_angle(pose, resized_frame, screen_width, screen_height, selected_pose)
 
             # Flip the frame horizontally to mirror it
@@ -278,34 +297,25 @@ def game_loop():
 
             # ---- End of Countdown Logic ----
 
-            # Check for different poses detection
-            if len(returned_angle_list) >= 2:
-                if selected_pose[0] == "TPose":
-                    if 170 < returned_angle_list[0] <= 185 and 170 < returned_angle_list[1] <= 185 and 170 < returned_angle_list[2] <= 185 and 170 < returned_angle_list[3] <= 185 and 80 < returned_angle_list[4] <= 110 and 80 < returned_angle_list[5] <= 110:
-                        t_pose_text = font.render("You are T Posing!", True, BLACK)
+            # Only track and calculate angles when tracking is active and a pose is selected
+            if tracking_active and selected_pose:
+                angles = track_angle(pose, resized_frame, screen_width, screen_height, selected_pose)
+                pose_text = pose_detection(angles, selected_pose)
 
-                        # Display T-Pose text at the center of the screen
-                        t_pose_text_rect = t_pose_text.get_rect(center=(screen_width // 2, screen_height // 2))
-                        screen.blit(t_pose_text, t_pose_text_rect)
-                        print("you are t posing")
+                # If there was a pose detected print on screen
+                if pose_text:
+                    pose_text_display = font.render(pose_text, True, BLACK)
 
+                    # Display text at the center of the screen
+                    t_pose_text_rect = pose_text_display.get_rect(center=(screen_width // 2, screen_height // 2))
+                    screen.blit(pose_text_display, t_pose_text_rect)
 
-                elif selected_pose[0] == "FlexPose":
-                    if 60 < returned_angle_list[0] <= 90 and 60 < returned_angle_list[1] <= 90:
-                        flex_pose_text = font.render("You are Flexing!", True, BLACK)
+                # Draw angles on the screen using Pygame (this ensures they're not rotated)
+                for idx, angle in enumerate(returned_angle_list):
+                    angle_text = font.render(f"Angle {idx+1}: {int(angle)}", True, BLACK)
+                    screen.blit(angle_text, (50, 100 + idx * 50))
 
-                        # Display flex Pose text
-                        flex_pose_text_rect = flex_pose_text.get_rect(center=(screen_width // 2, screen_height // 2))
-                        screen.blit(flex_pose_text, flex_pose_text_rect)
-                        print("you are t posing")
-
-
-            # Draw angles on the screen using Pygame (this ensures they're not rotated)
-            for idx, angle in enumerate(returned_angle_list):
-                angle_text = font.render(f"Angle {idx+1}: {int(angle)}", True, BLACK)
-                screen.blit(angle_text, (50, 100 + idx * 50))
-
-
+            # Display buttons
             t_pose_button.draw(screen)
             flex_pose_button.draw(screen)
 
