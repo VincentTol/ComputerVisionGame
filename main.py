@@ -298,6 +298,8 @@ def game_loop():
 
             text = font.render("", True, BLACK)
 
+            angles = []
+
             # Render the countdown text
             if seconds > 3:
                 countdown_text = font.render(str(seconds - 3), True, BLACK)
@@ -329,10 +331,6 @@ def game_loop():
                         score += 1
                         score_incremented = True
 
-                    # Draw angles on the screen using Pygame (this ensures they're not rotated)
-                    for idx, angle in enumerate(returned_angle_list):
-                        angle_text = font.render(f"Angle {idx + 1}: {int(angle)}", True, BLACK)
-                        screen.blit(angle_text, (50, 100 + idx * 50))
 
             else:
                 countdown_time += 8
@@ -347,6 +345,11 @@ def game_loop():
             # Display random pose text will be empty if not defined
             text_rect = text.get_rect(center=(screen_width // 2, 140))
             screen.blit(text, text_rect)
+
+            # Draw angles on the screen using Pygame (this ensures they're not rotated)
+            for idx, angle in enumerate(angles):
+                angle_text = font.render(f"Angle {idx + 1}: {int(angle)}", True, BLACK)
+                screen.blit(angle_text, (50, 100 + idx * 50))
 
             # ---- End of Countdown Logic ----
 
