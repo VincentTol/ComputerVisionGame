@@ -40,6 +40,8 @@ flex_pose = [
 
 ]
 
+all_poses = [flex_pose, t_pose]
+
 
 def calculate_angle(a, b, c):
     a = np.array(a)
@@ -215,10 +217,13 @@ t_pose_button = Button("T-pose", 300, 100, 200, 50, GREEN, BLACK)
 flex_pose_button = Button("Flex-pose", 300, 180, 200, 50, GREEN, BLACK)
 
 
+
 def game_loop():
     # Set the countdown time in seconds
-    countdown_time = 8  # 10 seconds countdown
+    countdown_time = 8  # 5 seconds countdown 3 second pose time
     selected_pose = None
+    pose_active = False
+    random_pose = None
 
     # Setup MediaPipe pose instance
     with (mp_pose.Pose(min_detection_confidence=0.5, min_tracking_confidence=0.5) as pose):
@@ -286,19 +291,31 @@ def game_loop():
             # Calculate the remaining time
             seconds = countdown_time - (pygame.time.get_ticks() - start_ticks) // 1000
 
+            text = font.render("", True, BLACK)
+
             # Render the countdown text
             if seconds > 3:
                 countdown_text = font.render(str(seconds - 3), True, BLACK)
             elif  0 < seconds <= 3:
                 countdown_text = font.render("Pose!", True, BLACK)
+                if random_pose is not None:
+                    text = font.render(random_pose[0], True, BLACK)
+                if not pose_active:
+                    random_pose = random.choice(all_poses)
+                pose_active = True
+                selected_pose = random_pose
             else:
-                countdown_text = font.render("Start!", True, BLACK)
                 countdown_time += 8
+                pose_active = False
 
             # Display the countdown text at the center of the screen
             countdown_text_rect = countdown_text.get_rect(center=(screen_width // 2, 100))
             screen.blit(frame_surface, (0, 0))  # First draw the frame
             screen.blit(countdown_text, countdown_text_rect)  # Then overlay the countdown
+
+            # Display random pose text will be empty if not defined
+            text_rect = text.get_rect(center=(screen_width // 2, 140))
+            screen.blit(text, text_rect)
 
             # ---- End of Countdown Logic ----
 
