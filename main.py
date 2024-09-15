@@ -3,7 +3,9 @@ import mediapipe as mp
 import numpy as np
 import pygame
 import ctypes
+import random
 import time
+
 # Define colors
 WHITE = (255, 255, 255)
 BLACK = (0, 0, 0)
@@ -215,7 +217,7 @@ flex_pose_button = Button("Flex-pose", 300, 180, 200, 50, GREEN, BLACK)
 
 def game_loop():
     # Set the countdown time in seconds
-    countdown_time = 10  # 10 seconds countdown
+    countdown_time = 8  # 10 seconds countdown
     selected_pose = None
 
     # Setup MediaPipe pose instance
@@ -285,10 +287,13 @@ def game_loop():
             seconds = countdown_time - (pygame.time.get_ticks() - start_ticks) // 1000
 
             # Render the countdown text
-            if seconds > 0:
-                countdown_text = font.render(str(seconds), True, BLACK)
+            if seconds > 3:
+                countdown_text = font.render(str(seconds - 3), True, BLACK)
+            elif  0 < seconds <= 3:
+                countdown_text = font.render("Pose!", True, BLACK)
             else:
                 countdown_text = font.render("Start!", True, BLACK)
+                countdown_time += 8
 
             # Display the countdown text at the center of the screen
             countdown_text_rect = countdown_text.get_rect(center=(screen_width // 2, 100))
