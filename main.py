@@ -12,6 +12,9 @@ BLACK = (0, 0, 0)
 GREEN = (0, 255, 0)
 RED = (255, 0, 0)
 
+score = 0
+score_incremented = False
+
 
 # List of landmarks to track
 t_pose = [
@@ -218,7 +221,9 @@ flex_pose_button = Button("Flex-pose", 300, 180, 200, 50, GREEN, BLACK)
 
 
 
+
 def game_loop():
+    global score, score_incremented
     # Set the countdown time in seconds
     countdown_time = 8  # 5 seconds countdown 3 second pose time
     selected_pose = None
@@ -304,9 +309,35 @@ def game_loop():
                     random_pose = random.choice(all_poses)
                 pose_active = True
                 selected_pose = random_pose
+
+
+                # Pose detection and score logic
+                # Only track and calculate angles when tracking is active and a pose is selected
+                if tracking_active and selected_pose:
+                    angles = track_angle(pose, resized_frame, screen_width, screen_height, selected_pose)
+                    pose_text = pose_detection(angles, selected_pose)
+
+                    # If there was a pose detected print on screen
+                    if pose_text:
+                        pose_text_display = font.render(pose_text, True, BLACK)
+
+                        # Display text at the center of the screen
+                        t_pose_text_rect = pose_text_display.get_rect(center=(screen_width // 2, screen_height // 2))
+                        screen.blit(pose_text_display, t_pose_text_rect)
+
+                    if pose_text and not score_incremented:
+                        score += 1
+                        score_incremented = True
+
+                    # Draw angles on the screen using Pygame (this ensures they're not rotated)
+                    for idx, angle in enumerate(returned_angle_list):
+                        angle_text = font.render(f"Angle {idx + 1}: {int(angle)}", True, BLACK)
+                        screen.blit(angle_text, (50, 100 + idx * 50))
+
             else:
                 countdown_time += 8
                 pose_active = False
+                score_incremented = False
 
             # Display the countdown text at the center of the screen
             countdown_text_rect = countdown_text.get_rect(center=(screen_width // 2, 100))
@@ -319,23 +350,9 @@ def game_loop():
 
             # ---- End of Countdown Logic ----
 
-            # Only track and calculate angles when tracking is active and a pose is selected
-            if tracking_active and selected_pose:
-                angles = track_angle(pose, resized_frame, screen_width, screen_height, selected_pose)
-                pose_text = pose_detection(angles, selected_pose)
-
-                # If there was a pose detected print on screen
-                if pose_text:
-                    pose_text_display = font.render(pose_text, True, BLACK)
-
-                    # Display text at the center of the screen
-                    t_pose_text_rect = pose_text_display.get_rect(center=(screen_width // 2, screen_height // 2))
-                    screen.blit(pose_text_display, t_pose_text_rect)
-
-                # Draw angles on the screen using Pygame (this ensures they're not rotated)
-                for idx, angle in enumerate(returned_angle_list):
-                    angle_text = font.render(f"Angle {idx+1}: {int(angle)}", True, BLACK)
-                    screen.blit(angle_text, (50, 100 + idx * 50))
+            # Display score
+            score_text = font.render(f"Score: {score}", True, BLACK)
+            screen.blit(score_text, (50, 50))
 
             # Display buttons
             t_pose_button.draw(screen)
