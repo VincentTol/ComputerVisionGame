@@ -43,7 +43,23 @@ flex_pose = [
 
 ]
 
-all_poses = [flex_pose, t_pose]
+star_pose = [
+    "StarPose",
+
+    # Check for 45-degree angle arms
+    "LEFT_SHOULDER", "RIGHT_SHOULDER", "LEFT_WRIST",
+    "RIGHT_SHOULDER", "LEFT_SHOULDER", "RIGHT_WRIST",
+
+    # Check for 45-degree angle legs
+    "LEFT_HIP", "RIGHT_HIP", "RIGHT_ANKLE",
+    "RIGHT_HIP", "LEFT_HIP", "LEFT_ANKLE"
+
+    # Check for straight arms
+    "LEFT_SHOULDER", "LEFT_ELBOW", "LEFT_WRIST",
+    "RIGHT_SHOULDER", "RIGHT_ELBOW", "RIGHT_WRIST",
+]
+
+all_poses = [flex_pose, t_pose, star_pose]
 
 
 def calculate_angle(a, b, c):
@@ -145,6 +161,8 @@ def main_menu():
     while running_menu:
         screen.fill(WHITE)
 
+        screen.blit(title, ((screen_width // 2) - 80, (screen_height // 2) - 100))
+
         # Draw buttons
         start_button.draw(screen)
         instructions_button.draw(screen)
@@ -162,64 +180,24 @@ def main_menu():
             if quit_button.is_clicked(event):
                 running_menu = False
 
+
         pygame.display.update()
 
 def pose_detection(angles, pose):
     if pose is not None:
         if pose[0] == "TPose":
-            if 170 < angles[0] <= 185 and 170 < angles[1] <= 185 and 170 < angles[
-                2] <= 185 and 170 < angles[3] <= 185 and 80 < angles[4] <= 110 and 80 < \
-                    angles[5] <= 110:
+            if (170 < angles[0] <= 185 and 170 < angles[1] <= 185 and 170 < angles[2] <= 185
+                    and 170 < angles[3] <= 185 and 80 < angles[4] <= 110 and 80 < \
+                    angles[5] <= 110):
                 return "You are T Posing!"
         elif pose[0] == "FlexPose":
             if 60 < angles[0] <= 90 and 60 < angles[1] <= 90:
                 return "You are Flexing!"
+        elif pose[0] == "StarPose":
+            if (50 < angles[0] < 60 and 50 < angles[1] < 60 and 50 < angles[2] < 60 and 50 < angles[3] < 60
+                    and 170 < angles[4] <= 185 and 170 < angles[5] <= 185):
+                return "You are a Star!"
     return None
-
-
-
-# Initialize Pygame
-pygame.init()
-
-# Get screen resolution using Ctypes
-user32 = ctypes.windll.user32
-screen_width = user32.GetSystemMetrics(0)
-screen_height = user32.GetSystemMetrics(1)
-
-print(f"Screen Resolution: {screen_width}x{screen_height}")
-
-# Create a fullscreen window using the full resolution
-screen = pygame.display.set_mode((screen_width, screen_height), pygame.FULLSCREEN)
-pygame.display.set_caption("MediaPipe with Pygame")
-
-# Mediapipe solutions for pose
-mp_drawing = mp.solutions.drawing_utils
-mp_pose = mp.solutions.pose
-
-# Video capture
-cap = cv2.VideoCapture(0)
-
-# Set camera resolution (match screen resolution if camera supports it)
-cap.set(cv2.CAP_PROP_FRAME_WIDTH, screen_width)
-cap.set(cv2.CAP_PROP_FRAME_HEIGHT, screen_height)
-
-
-
-# Define fonts
-font = pygame.font.SysFont(None, 48)
-small_font = pygame.font.SysFont(None, 36)
-
-
-# Create buttons for Start Menu
-start_button = Button("Start", 200, 100, 200, 50, GREEN, BLACK)
-instructions_button = Button("Instructions", 200, 180, 200, 50, GREEN, BLACK)
-quit_button = Button("Quit", 200, 260, 200, 50, RED, BLACK)
-
-# Create buttons for Game
-t_pose_button = Button("T-pose", 300, 100, 200, 50, GREEN, BLACK)
-flex_pose_button = Button("Flex-pose", 300, 180, 200, 50, GREEN, BLACK)
-
-
 
 
 def game_loop():
@@ -270,6 +248,13 @@ def game_loop():
                             selected_pose = flex_pose
                         else:
                             selected_pose = None
+                if star_pose_button.is_clicked(event):
+                    if tracking_active:
+                        star_pose_button.clicked = not star_pose_button.clicked
+                        if star_pose_button.clicked:
+                            selected_pose = star_pose
+                        else:
+                            selected_pose = None
 
             # Capture frame
             ret, frame = cap.read()
@@ -278,13 +263,6 @@ def game_loop():
 
             # Convert BGR to RGB once and resize to the screen resolution if needed
             resized_frame = cv2.resize(frame, (screen_width, screen_height))
-
-            # Store the array that contains the angles measured
-            returned_angle_list = []
-
-            # Process pose and calculate angle if tracking is active
-            if tracking_active and selected_pose is not None:
-                returned_angle_list = track_angle(pose, resized_frame, screen_width, screen_height, selected_pose)
 
             # Flip the frame horizontally to mirror it
             mirrored_frame = cv2.flip(resized_frame, 1)
@@ -337,6 +315,7 @@ def game_loop():
                 pose_active = False
                 score_incremented = False
 
+
             # Display the countdown text at the center of the screen
             countdown_text_rect = countdown_text.get_rect(center=(screen_width // 2, 100))
             screen.blit(frame_surface, (0, 0))  # First draw the frame
@@ -346,10 +325,13 @@ def game_loop():
             text_rect = text.get_rect(center=(screen_width // 2, 140))
             screen.blit(text, text_rect)
 
-            # Draw angles on the screen using Pygame (this ensures they're not rotated)
-            for idx, angle in enumerate(angles):
-                angle_text = font.render(f"Angle {idx + 1}: {int(angle)}", True, BLACK)
-                screen.blit(angle_text, (50, 100 + idx * 50))
+            if selected_pose:
+                test_angles = track_angle(pose, resized_frame, screen_width, screen_height, selected_pose)
+
+                # Draw angles on the screen using Pygame (this ensures they're not rotated)
+                for idx, angle in enumerate(test_angles):
+                    angle_text = font.render(f"Angle {idx + 1}: {int(angle)}", True, BLACK)
+                    screen.blit(angle_text, (50, 100 + idx * 50))
 
             # ---- End of Countdown Logic ----
 
@@ -360,11 +342,13 @@ def game_loop():
             # Display buttons
             t_pose_button.draw(screen)
             flex_pose_button.draw(screen)
+            star_pose_button.draw(screen)
 
             # Indicate whether tracking is active or not
             tracking_text = "Tracking: ON" if tracking_active else "Tracking: OFF"
             tracking_status = small_font.render(tracking_text, True, GREEN if tracking_active else RED)
             screen.blit(tracking_status, (screen_width - 200, 10))
+
 
             # Display everything on the Pygame screen
             pygame.display.flip()
@@ -375,6 +359,49 @@ def game_loop():
         cap.release()
         pygame.quit()
 
+
+# Initialize Pygame
+pygame.init()
+
+# Get screen resolution using Ctypes
+user32 = ctypes.windll.user32
+screen_width = user32.GetSystemMetrics(0)
+screen_height = user32.GetSystemMetrics(1)
+
+print(f"Screen Resolution: {screen_width}x{screen_height}")
+
+# Create a fullscreen window using the full resolution
+screen = pygame.display.set_mode((screen_width, screen_height), pygame.FULLSCREEN)
+pygame.display.set_caption("MediaPipe with Pygame")
+
+# Mediapipe solutions for pose
+mp_drawing = mp.solutions.drawing_utils
+mp_pose = mp.solutions.pose
+
+# Video capture
+cap = cv2.VideoCapture(0)
+
+# Set camera resolution (match screen resolution if camera supports it)
+cap.set(cv2.CAP_PROP_FRAME_WIDTH, screen_width)
+cap.set(cv2.CAP_PROP_FRAME_HEIGHT, screen_height)
+
+# Define fonts
+font = pygame.font.SysFont(None, 48)
+small_font = pygame.font.SysFont(None, 36)
+big_font = pygame.font.SysFont(None, 90)
+
+# Create buttons for Start Menu
+start_button = Button("Start", screen_width // 2, screen_height // 2, 200, 50, GREEN, BLACK)
+instructions_button = Button("Instructions", screen_width // 2, (screen_height // 2) + 80, 200, 50, GREEN, BLACK)
+quit_button = Button("Quit", screen_width // 2,  (screen_height // 2) + 160, 200, 50, RED, BLACK)
+
+# Create buttons for Game
+t_pose_button = Button("T-pose", 300, 100, 200, 50, GREEN, BLACK)
+flex_pose_button = Button("Flex-pose", 300, 180, 200, 50, GREEN, BLACK)
+star_pose_button = Button("Star-pose", 300, 260, 200, 50, GREEN, BLACK)
+
+# Make title Screen
+title = big_font.render("Strike a Pose!", True, BLACK)
 
 
 main_menu()
